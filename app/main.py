@@ -61,8 +61,23 @@ def read_paleta(paleta_id: int, db: Session = Depends(get_db)):
     return paleta
 
 
-# --- NUEVOS ENDPOINTS PARA EL CARRITO PRELIMINAR ---
+# --- Endpoint para crear una nueva paleta (mantener igual) ---
+@app.post("/paletas/", response_model=schemas.PaletaInDB, status_code=status.HTTP_201_CREATED)
+def create_paleta(paleta_data: schemas.PaletaCreate, db: Session = Depends(get_db)):
+    # Verificar si ya existe una paleta con el mismo nombre
+    existing_paleta = db.query(models.Paleta).filter(models.Paleta.nombre == paleta_data.nombre).first()
+    if existing_paleta:
+        raise HTTPException(status_code=400, detail="Ya existe una paleta con este nombre.")
 
+    # Crear la nueva paleta
+    new_paleta = models.Paleta(**paleta_data.model_dump())
+    db.add(new_paleta)
+    db.commit()
+    db.refresh(new_paleta)
+    return new_paleta
+
+# --- NUEVOS ENDPOINTS PARA EL CARRITO PRELIMINAR ---
+"""
 @app.post(
     "/cart/add",
     response_model=schemas.CartItemInDB,
@@ -100,6 +115,28 @@ def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)
         db.commit()
         db.refresh(new_cart_item)
         return new_cart_item
+"""
+@app.post("/cart/add", response_model=schemas.CartItemInDB)
+def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)):
+    paleta = db.query(models.Paleta).filter(models.Paleta.id == item_data.paleta_id).first()
+    if not paleta:
+        raise HTTPException(status_code=404, detail="Paleta no encontrada.")
+
+    cart_item = db.query(models.CartItem).filter(
+        models.CartItem.user_id == item_data.user_id,
+        models.CartItem.paleta_id == item_data.paleta_id
+    ).first()
+
+    if cart_item:
+        cart_item.quantity += item_data.quantity
+    else:
+        cart_item = models.CartItem(**item_data.model_dump())
+
+    db.add(cart_item)
+    db.commit()
+    db.refresh(cart_item)
+    return cart_item
+
 
 @app.get(
     "/cart/{user_id}",
@@ -123,9 +160,28 @@ def remove_from_cart(cart_item_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Ítem del carrito no encontrado.")
     db.delete(cart_item)
     db.commit()
-    return {"message": "Ítem eliminado del carrito exitosamente."}
+    return JSONResponse(status_code=204, content={"message": "Ítem eliminado del carrito exitosamente."})
 
+@app.patch("/cart/decrease", summary="Disminuir una unidad de una paleta del carrito")
+def decrease_from_cart(user_id: int, paleta_id: int, db: Session = Depends(get_db)):
+    cart_item = db.query(models.CartItem).filter(
+        models.CartItem.user_id == user_id,
+        models.CartItem.paleta_id == paleta_id
+    ).first()
 
+    if not cart_item:
+        raise HTTPException(status_code=404, detail="Ítem no encontrado en el carrito.")
+
+    if cart_item.quantity > 1:
+        cart_item.quantity -= 1
+        db.commit()
+        db.refresh(cart_item)
+        return {"message": "Cantidad actualizada", "item": cart_item}
+    else:
+        db.delete(cart_item)
+        db.commit()
+        return {"message": "Ítem eliminado porque la cantidad llegó a cero."}
+    
 # (Puedes dejar el endpoint de orders/ si quieres mantenerlo para futuras implementaciones de checkout)
 # @app.post(
 #     "/orders/",
