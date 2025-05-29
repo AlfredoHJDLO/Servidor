@@ -2,5 +2,5 @@ projectKey=paletas-backend
 serverUrl=http://localhost:9000
 serverVersion=25.5.0.107428
 dashboardUrl=http://localhost:9000/dashboard?id=paletas-backend
-ceTaskId=208db5a6-c1c7-4f14-b6f9-072821db278b
-ceTaskUrl=http://localhost:9000/api/ce/task?id=208db5a6-c1c7-4f14-b6f9-072821db278b
+ceTaskId=11727c76-a3b7-4fa0-81ce-aed85ccb1150
+ceTaskUrl=http://localhost:9000/api/ce/task?id=11727c76-a3b7-4fa0-81ce-aed85ccb1150
