@@ -23,23 +23,31 @@ class PaletaInDB(PaletaBase):
     class Config:
         orm_mode = True
 
-# --- Esquemas para el carrito preliminar ---
 
-class CartItemCreate(BaseModel):
-    """Esquema para añadir/actualizar un ítem en el carrito."""
+# --- Esquema para la respuesta del carrito de un usuario ---
+class CartItemBase(BaseModel):
     user_id: int = Field(..., example=1, description="ID del usuario (fijo por ahora).")
-    paleta_id: int = Field(..., example=1, description="ID de la paleta a añadir/actualizar.")
-    quantity: int = Field(..., gt=0, example=1, description="Cantidad de la paleta.")
+    paleta_id: int = Field(..., example=1, description="ID de la paleta en el carrito.")
+    quantity: int = Field(..., gt=0, example=1, description="Cantidad de la paleta en el carrito.")
 
-class CartItemInDB(CartItemCreate):
-    """Esquema para un ítem del carrito tal como se almacena/retorna de la DB."""
+class CartItemCreate(CartItemBase):
+    pass
+
+class PaletaOut(BaseModel):
     id: int
-    added_at: Optional[datetime.datetime] = None
+    nombre: str
+    precio: float
+    imagen_url: Optional[str]
 
     class Config:
         orm_mode = True
 
-# Opcional: Si quieres un esquema para ver el carrito completo de un usuario
-class UserCart(BaseModel):
+class CartItemInDB(BaseModel):
+    id: int
     user_id: int
-    items: List[CartItemInDB] # Lista de ítems en el carrito del usuario
+    quantity: int
+    paleta: PaletaOut
+    subtotal: float
+
+    class Config:
+        orm_mode = True
