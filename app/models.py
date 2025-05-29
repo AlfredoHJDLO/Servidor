@@ -18,9 +18,6 @@ class Paleta(Base):
     fecha_creacion = Column(TIMESTAMP, server_default=func.now())
     fecha_actualizacion = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
-    # Agregamos relación para ver qué items de carrito están asociados a esta paleta
-    cart_items = relationship("CartItem", back_populates="paleta")
-
 
     def __repr__(self):
         return f"<Paleta(id={self.id}, nombre='{self.nombre}', precio={self.precio})>"
@@ -32,16 +29,19 @@ class CartItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)
-    paleta_id = Column(Integer, ForeignKey("paletas.id"), nullable=False)
+    paleta_id = Column(Integer, nullable=True)  # Puede ser null para personalizadas
     quantity = Column(Integer, nullable=False)
     added_at = Column(TIMESTAMP, server_default=func.now())
 
-    # Relación con la tabla Paleta
-    paleta = relationship("Paleta", back_populates="cart_items")
+    # Datos de la paleta copiados (personalizada o fija)
+    nombre = Column(String(255), nullable=False)
+    descripcion = Column(Text, nullable=True)
+    ingredientes = Column(Text, nullable=True)
+    precio = Column(DECIMAL(10, 2), nullable=False)
+    imagen_url = Column(String(255), nullable=True)
+    tiene_oferta = Column(Boolean, default=False)
+    texto_oferta = Column(String(100), nullable=True)
 
     @property
     def subtotal(self):
-        return float(self.quantity) * float(self.paleta.precio)
-
-    def __repr__(self):
-        return f"<CartItem(id={self.id}, user_id={self.user_id}, paleta_id={self.paleta_id}, quantity={self.quantity})>"
+        return float(self.quantity) * float(self.precio)

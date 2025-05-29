@@ -30,8 +30,24 @@ class CartItemBase(BaseModel):
     paleta_id: int = Field(..., example=1, description="ID de la paleta en el carrito.")
     quantity: int = Field(..., gt=0, example=1, description="Cantidad de la paleta en el carrito.")
 
-class CartItemCreate(CartItemBase):
-    pass
+class CartItemCreate(BaseModel):
+    user_id: int
+    quantity: int
+
+    # Opcional si es una paleta fija
+    paleta_id: Optional[int] = None
+
+    # Requerido si es personalizada
+    nombre: Optional[str] = None
+    descripcion: Optional[str] = None
+    ingredientes: Optional[str] = None
+    precio: Optional[float] = None
+    imagen_url: Optional[str] = None
+    tiene_oferta: Optional[bool] = False
+    texto_oferta: Optional[str] = None
+
+    class Config:
+        orm_mode = True
 
 class PaletaOut(BaseModel):
     id: int
@@ -45,8 +61,15 @@ class PaletaOut(BaseModel):
 class CartItemInDB(BaseModel):
     id: int
     user_id: int
+    paleta_id: Optional[int]
     quantity: int
-    paleta: PaletaOut
+    nombre: str
+    descripcion: Optional[str]
+    ingredientes: Optional[str]
+    precio: float
+    imagen_url: Optional[str]
+    tiene_oferta: Optional[bool]
+    texto_oferta: Optional[str]
     subtotal: float
 
     class Config:

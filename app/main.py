@@ -118,24 +118,71 @@ def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)
 """
 @app.post("/cart/add", response_model=schemas.CartItemInDB)
 def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)):
-    paleta = db.query(models.Paleta).filter(models.Paleta.id == item_data.paleta_id).first()
-    if not paleta:
-        raise HTTPException(status_code=404, detail="Paleta no encontrada.")
+    if item_data.paleta_id:
+        # Paleta fija, obtener datos desde DB
+        paleta = db.query(models.Paleta).filter(models.Paleta.id == item_data.paleta_id).first()
+        if not paleta:
+            raise HTTPException(status_code=404, detail="Paleta no encontrada.")
+        
+        nombre = paleta.nombre
+        descripcion = paleta.descripcion
+        ingredientes = paleta.ingredientes
+        precio = float(paleta.precio)
+        imagen_url = paleta.imagen_url
+        tiene_oferta = paleta.tiene_oferta
+        texto_oferta = paleta.texto_oferta
+    else:
+        # Paleta personalizada, datos vienen en item_data
+        nombre = item_data.nombre
+        descripcion = item_data.descripcion
+        ingredientes = item_data.ingredientes
+        precio = float(item_data.precio)
+        imagen_url = item_data.imagen_url
+        tiene_oferta = item_data.tiene_oferta or False
+        texto_oferta = item_data.texto_oferta
 
+    # Buscar si el ítem ya está en el carrito para este usuario y paleta (o personalizado)
     cart_item = db.query(models.CartItem).filter(
         models.CartItem.user_id == item_data.user_id,
         models.CartItem.paleta_id == item_data.paleta_id
     ).first()
 
     if cart_item:
+        # Actualiza la cantidad y datos por si cambian
         cart_item.quantity += item_data.quantity
+        cart_item.nombre = nombre
+        cart_item.descripcion = descripcion
+        cart_item.ingredientes = ingredientes
+        cart_item.precio = precio
+        cart_item.imagen_url = imagen_url
+        cart_item.tiene_oferta = tiene_oferta
+        cart_item.texto_oferta = texto_oferta
+        db.add(cart_item)
+        db.commit()
+        db.refresh(cart_item)
     else:
-        cart_item = models.CartItem(**item_data.model_dump())
+        # Crear nuevo item carrito
+        cart_item = models.CartItem(
+            user_id=item_data.user_id,
+            paleta_id=item_data.paleta_id,
+            quantity=item_data.quantity,
+            nombre=nombre,
+            descripcion=descripcion,
+            ingredientes=ingredientes,
+            precio=precio,
+            imagen_url=imagen_url,
+            tiene_oferta=tiene_oferta,
+            texto_oferta=texto_oferta
+        )
+        db.add(cart_item)
+        db.commit()
+        db.refresh(cart_item)
 
-    db.add(cart_item)
-    db.commit()
-    db.refresh(cart_item)
-    return cart_item
+    # Calcular subtotal para la respuesta
+    result = cart_item.__dict__.copy()
+    result["subtotal"] = cart_item.quantity * cart_item.precio
+
+    return result
 
 
 @app.get(
