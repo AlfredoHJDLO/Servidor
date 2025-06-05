@@ -1,5 +1,5 @@
 # app/schemas.py (Actualizado para el carrito preliminar)
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 import datetime
 
@@ -74,3 +74,18 @@ class CartItemInDB(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class UserBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, example="usuario123")
+    email: EmailStr
+    password: str = Field(..., min_length=6, example="password123")
+    is_admin: bool = Field(True, example=True)
+    class Config:
+        orm_mode = True
+
+class UserCreate(UserBase):
+    pass
+
+class UserResponse(UserBase):
+    id: int

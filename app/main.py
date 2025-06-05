@@ -8,7 +8,8 @@ from typing import List, Optional
 
 from . import models, schemas
 from .database import engine, get_db
-
+from .users import users
+from .auth import auth
 # Crea las tablas en la base de datos si no existen
 # Esto creará la tabla 'cart_items_preliminar' también
 models.Base.metadata.create_all(bind=engine)
@@ -17,6 +18,9 @@ app = FastAPI(
     title="API de Paletas Ternurin",
     description="API para gestionar el catálogo de paletas personalizadas y un carrito básico."
 )
+
+app.include_router(users, tags=["users"])
+app.include_router(auth, tags=["auth"])
 
 # --- Configuración CORS (mantener igual) ---
 origins = [
@@ -30,6 +34,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # --- Montar Directorio de Archivos Estáticos (mantener igual) ---
 app.mount("/static", StaticFiles(directory="static"), name="static")
