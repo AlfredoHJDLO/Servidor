@@ -15,6 +15,11 @@ class PaletaBase(BaseModel):
 class PaletaCreate(PaletaBase):
     pass
 
+class PaletaResponse(PaletaBase):
+    id: int
+    class Config:
+        orm_mode = True
+
 class PaletaInDB(PaletaBase):
     id: int = Field(..., example=1)
     fecha_creacion: Optional[datetime.datetime] = None

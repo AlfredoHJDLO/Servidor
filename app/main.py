@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-
+from .auth import get_current_active_user
 from . import models, schemas
 from .database import engine, get_db
 from .users import users
@@ -40,6 +40,13 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # --- Endpoint para obtener todas las paletas (mantener igual) ---
+
+def verify_admin(user: models.User = Depends(get_current_active_user)):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    return user
+
+
 @app.get(
     "/paletas/",
     response_model=List[schemas.PaletaInDB],
@@ -68,7 +75,7 @@ def read_paleta(paleta_id: int, db: Session = Depends(get_db)):
 
 # --- Endpoint para crear una nueva paleta (mantener igual) ---
 @app.post("/paletas/", response_model=schemas.PaletaInDB, status_code=status.HTTP_201_CREATED)
-def create_paleta(paleta_data: schemas.PaletaCreate, db: Session = Depends(get_db)):
+def create_paleta(paleta_data: schemas.PaletaCreate, db: Session = Depends(get_db), admin: models.User = Depends(verify_admin)):
     # Verificar si ya existe una paleta con el mismo nombre
     existing_paleta = db.query(models.Paleta).filter(models.Paleta.nombre == paleta_data.nombre).first()
     if existing_paleta:
@@ -81,46 +88,37 @@ def create_paleta(paleta_data: schemas.PaletaCreate, db: Session = Depends(get_d
     db.refresh(new_paleta)
     return new_paleta
 
-# --- NUEVOS ENDPOINTS PARA EL CARRITO PRELIMINAR ---
-"""
-@app.post(
-    "/cart/add",
-    response_model=schemas.CartItemInDB,
-    status_code=status.HTTP_200_OK, # Puede ser 200 OK si actualiza, o 201 Created si es nuevo
-    summary="Añadir o actualizar un ítem en el carrito",
-    description="Añade una paleta al carrito del usuario. Si ya existe, actualiza la cantidad."
-)
-def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)):
-    # 1. Verificar si la paleta existe
-    paleta = db.query(models.Paleta).filter(models.Paleta.id == item_data.paleta_id).first()
+# *--- Endpoint para actualizar una paleta (mantener igual) ---
+@app.put("/paletas/{paleta_id}", response_model=schemas.PaletaResponse)
+def update_paleta(paleta_id: int, paleta_data: schemas.PaletaCreate, db: Session = Depends(get_db), admin: models.User = Depends(verify_admin)):
+    # Buscar la paleta por ID
+    paleta = db.query(models.Paleta).filter(models.Paleta.id == paleta_id).first()
     if not paleta:
-        raise HTTPException(status_code=404, detail="Paleta no encontrada.")
+        raise HTTPException(status_code=404, detail="Paleta no encontrada")
 
-    # 2. Buscar si el ítem ya está en el carrito para este usuario
-    cart_item = db.query(models.CartItem).filter(
-        models.CartItem.user_id == item_data.user_id,
-        models.CartItem.paleta_id == item_data.paleta_id
-    ).first()
+    # Actualizar los campos de la paleta
+    for key, value in paleta_data.model_dump().items():
+        setattr(paleta, key, value)
 
-    if cart_item:
-        # Si ya existe, actualiza la cantidad
-        cart_item.quantity = item_data.quantity
-        db.add(cart_item)
-        db.commit()
-        db.refresh(cart_item)
-        return cart_item
-    else:
-        # Si no existe, crea un nuevo ítem en el carrito
-        new_cart_item = models.CartItem(
-            user_id=item_data.user_id,
-            paleta_id=item_data.paleta_id,
-            quantity=item_data.quantity
-        )
-        db.add(new_cart_item)
-        db.commit()
-        db.refresh(new_cart_item)
-        return new_cart_item
-"""
+    db.commit()
+    db.refresh(paleta)
+    return paleta
+
+# *--- Endpoint para eliminar una paleta (mantener igual) ---
+@app.delete("/paletas/{paleta_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_paleta(paleta_id: int, db: Session = Depends(get_db), admin: models.User = Depends(verify_admin)):
+    # Buscar la paleta por ID
+    paleta = db.query(models.Paleta).filter(models.Paleta.id == paleta_id).first()
+    if not paleta:
+        raise HTTPException(status_code=404, detail="Paleta no encontrada")
+
+    # Eliminar la paleta
+    db.delete(paleta)
+    db.commit()
+    return JSONResponse(status_code=204, content={"message": "Paleta eliminada exitosamente."})
+
+# * --- NUEVOS ENDPOINTS PARA EL CARRITO PRELIMINAR ---
+
 @app.post("/cart/add", response_model=schemas.CartItemInDB)
 def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)):
     if item_data.paleta_id:
@@ -234,14 +232,3 @@ def decrease_from_cart(user_id: int, paleta_id: int, db: Session = Depends(get_d
         db.commit()
         return {"message": "Ítem eliminado porque la cantidad llegó a cero."}
     
-# (Puedes dejar el endpoint de orders/ si quieres mantenerlo para futuras implementaciones de checkout)
-# @app.post(
-#     "/orders/",
-#     response_model=schemas.OrderInDB,
-#     status_code=status.HTTP_201_CREATED,
-#     summary="Crear una nueva orden de compra",
-#     description="Registra una nueva orden con los ítems especificados."
-# )
-# async def create_order(order_data: schemas.OrderCreate, db: Session = Depends(get_db)):
-#     # ... (código anterior para create_order) ...
-#     pass # O borrar si no lo vas a usar por ahora.
