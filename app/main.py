@@ -5,13 +5,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+import os
 
 from . import models, schemas
 from .database import engine, get_db
 
 # Crea las tablas en la base de datos si no existen
 # Esto creará la tabla 'cart_items_preliminar' también
-models.Base.metadata.create_all(bind=engine)
+if os.getenv("TESTING_ENV") != "True": # <--- AÑADE ESTA CONDICIÓN
+    models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="API de Paletas Ternurin",
@@ -76,46 +78,6 @@ def create_paleta(paleta_data: schemas.PaletaCreate, db: Session = Depends(get_d
     db.refresh(new_paleta)
     return new_paleta
 
-# --- NUEVOS ENDPOINTS PARA EL CARRITO PRELIMINAR ---
-"""
-@app.post(
-    "/cart/add",
-    response_model=schemas.CartItemInDB,
-    status_code=status.HTTP_200_OK, # Puede ser 200 OK si actualiza, o 201 Created si es nuevo
-    summary="Añadir o actualizar un ítem en el carrito",
-    description="Añade una paleta al carrito del usuario. Si ya existe, actualiza la cantidad."
-)
-def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)):
-    # 1. Verificar si la paleta existe
-    paleta = db.query(models.Paleta).filter(models.Paleta.id == item_data.paleta_id).first()
-    if not paleta:
-        raise HTTPException(status_code=404, detail="Paleta no encontrada.")
-
-    # 2. Buscar si el ítem ya está en el carrito para este usuario
-    cart_item = db.query(models.CartItem).filter(
-        models.CartItem.user_id == item_data.user_id,
-        models.CartItem.paleta_id == item_data.paleta_id
-    ).first()
-
-    if cart_item:
-        # Si ya existe, actualiza la cantidad
-        cart_item.quantity = item_data.quantity
-        db.add(cart_item)
-        db.commit()
-        db.refresh(cart_item)
-        return cart_item
-    else:
-        # Si no existe, crea un nuevo ítem en el carrito
-        new_cart_item = models.CartItem(
-            user_id=item_data.user_id,
-            paleta_id=item_data.paleta_id,
-            quantity=item_data.quantity
-        )
-        db.add(new_cart_item)
-        db.commit()
-        db.refresh(new_cart_item)
-        return new_cart_item
-"""
 @app.post("/cart/add", response_model=schemas.CartItemInDB)
 def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)):
     if item_data.paleta_id:
