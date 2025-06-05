@@ -94,3 +94,40 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
+
+
+class OrderBase(BaseModel):
+    user_id: int
+
+class OrderCreate(OrderBase):
+    pass
+
+
+class OrderItemBase(BaseModel):
+    paleta_id: Optional[int]
+    quantity: int
+    nombre: str
+    descripcion: Optional[str]
+    ingredientes: Optional[str]
+    precio: float
+    imagen_url: Optional[str]
+class OrderItemInDB(OrderItemBase):
+    id: int
+    order_id: int
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "from_attributes": True  # equivalente a orm_mode = True
+    }
+
+class OrderInDB(OrderBase):
+    id: int
+    user_id: int
+    created_at: datetime.datetime
+    attended: bool
+    items: List[OrderItemInDB] = []
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "from_attributes": True  # equivalente a orm_mode = True
+    }

@@ -1,5 +1,5 @@
 # app/main.py (Actualizado para el carrito preliminar)
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -120,7 +120,7 @@ def delete_paleta(paleta_id: int, db: Session = Depends(get_db), admin: models.U
 # * --- NUEVOS ENDPOINTS PARA EL CARRITO PRELIMINAR ---
 
 @app.post("/cart/add", response_model=schemas.CartItemInDB)
-def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)):
+def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     if item_data.paleta_id:
         # Paleta fija, obtener datos desde DB
         paleta = db.query(models.Paleta).filter(models.Paleta.id == item_data.paleta_id).first()
@@ -194,7 +194,7 @@ def add_to_cart(item_data: schemas.CartItemCreate, db: Session = Depends(get_db)
     summary="Obtener ítems del carrito de un usuario",
     description="Devuelve todos los ítems en el carrito de un usuario específico."
 )
-def get_user_cart(user_id: int, db: Session = Depends(get_db)):
+def get_user_cart(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     cart_items = db.query(models.CartItem).filter(models.CartItem.user_id == user_id).all()
     return cart_items
 
@@ -204,7 +204,7 @@ def get_user_cart(user_id: int, db: Session = Depends(get_db)):
     summary="Eliminar un ítem del carrito",
     description="Elimina un ítem específico del carrito por su ID."
 )
-def remove_from_cart(cart_item_id: int, db: Session = Depends(get_db)):
+def remove_from_cart(cart_item_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     cart_item = db.query(models.CartItem).filter(models.CartItem.id == cart_item_id).first()
     if not cart_item:
         raise HTTPException(status_code=404, detail="Ítem del carrito no encontrado.")
@@ -213,7 +213,7 @@ def remove_from_cart(cart_item_id: int, db: Session = Depends(get_db)):
     return JSONResponse(status_code=204, content={"message": "Ítem eliminado del carrito exitosamente."})
 
 @app.patch("/cart/decrease", summary="Disminuir una unidad de una paleta del carrito")
-def decrease_from_cart(user_id: int, paleta_id: int, db: Session = Depends(get_db)):
+def decrease_from_cart(user_id: int, paleta_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
     cart_item = db.query(models.CartItem).filter(
         models.CartItem.user_id == user_id,
         models.CartItem.paleta_id == paleta_id
@@ -231,4 +231,98 @@ def decrease_from_cart(user_id: int, paleta_id: int, db: Session = Depends(get_d
         db.delete(cart_item)
         db.commit()
         return {"message": "Ítem eliminado porque la cantidad llegó a cero."}
+
+@app.delete("/cart/clear/{user_id}", summary="Limpiar el carrito de un usuario")
+def clear_cart(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    cart_items = db.query(models.CartItem).filter(models.CartItem.user_id == user_id).all()
+    if not cart_items:
+        raise HTTPException(status_code=404, detail="Carrito vacío o no encontrado.")
     
+    for item in cart_items:
+        db.delete(item)
+    
+    db.commit()
+    return JSONResponse(status_code=204, content={"message": "Carrito limpiado exitosamente."})
+
+# * --- ENDPOINTS PARA PEDIDOS ---
+# Lista pedidos (opcional filtro)
+@app.get("/orders/all", response_model=List[schemas.OrderInDB])
+def list_orders(attended: Optional[bool] = Query(None), db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    query = db.query(models.Order)
+    if attended is not None:
+        query = query.filter(models.Order.attended == attended)
+    orders = query.all()
+    return orders
+
+# Opcionalmente (para el usuario). Detalle de un pedido.
+@app.get("/orders/user/{order_id}", response_model=schemas.OrderInDB)
+def get_order(order_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    return order
+
+# 3. Pedidos de un usuario
+@app.get("/orders/user/{user_id}", response_model=List[schemas.OrderInDB])
+def get_orders_by_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user),
+):
+    orders = db.query(models.Order).filter(models.Order.user_id == user_id).all()
+    return orders
+
+
+"""
+función o endpoint que permite al administrador (o quien tenga permiso) marcar un pedido como “atendido”, 
+es decir, que ya fue procesado, entregado o cerrado.
+"""
+@app.patch("/orders/{order_id}/attend", response_model=schemas.OrderInDB)
+def mark_order_attended(order_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_active_user)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.")
+    order.attended = True
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+# Crear pedido (opcional: llamar cuando el usuario confirma compra)
+@app.post("/orders", response_model=schemas.OrderInDB)
+def create_order(user_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
+    # Crear pedido
+    new_order = models.Order(user_id=user_id)
+    db.add(new_order)
+    db.commit()
+    db.refresh(new_order)
+
+    # Obtener ítems del carrito para ese usuario
+    cart_items = db.query(models.CartItem).filter(models.CartItem.user_id == user_id).all()
+
+    if not cart_items:
+        raise HTTPException(status_code=400, detail="El carrito está vacío.")
+
+    # Copiar ítems del carrito al pedido
+    for c_item in cart_items:
+        order_item = models.OrderItem(
+            order_id=new_order.id,
+            paleta_id=c_item.paleta_id,
+            quantity=c_item.quantity,
+            nombre=c_item.nombre,
+            descripcion=c_item.descripcion,
+            ingredientes=c_item.ingredientes,
+            precio=c_item.precio,
+            imagen_url=c_item.imagen_url
+        )
+        db.add(order_item)
+
+    # Limpiar carrito
+    for c_item in cart_items:
+        db.delete(c_item)
+
+    db.commit()
+    db.refresh(new_order)
+
+    return new_order
+
