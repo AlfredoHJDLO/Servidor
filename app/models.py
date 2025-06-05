@@ -1,5 +1,5 @@
 # app/models.py (Actualizado para el carrito preliminar)
-from sqlalchemy import Column, Integer, String, DECIMAL, Boolean, Text, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, Integer, String, DECIMAL, Boolean, Text, TIMESTAMP, ForeignKey, DateTime, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -45,3 +45,40 @@ class CartItem(Base):
     @property
     def subtotal(self):
         return float(self.quantity) * float(self.precio)
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False)
+    password = Column(String(255), nullable=False)
+    is_admin = Column(Boolean, default=False)
+    username = Column(String(255), nullable=True)
+    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
+
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    attended = Column(Boolean, default=False)  # <-- campo para marcar atendido
+
+    user = relationship("User", back_populates="orders")
+    # Opcional: relacionar con detalles del pedido (items)
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    paleta_id = Column(Integer, nullable=True)  # puede ser NULL si es paleta personalizada
+    quantity = Column(Integer, nullable=False)
+    nombre = Column(String(255), nullable=False)
+    descripcion = Column(String(255), nullable=True)
+    ingredientes = Column(String(255), nullable=True)
+    precio = Column(Float, nullable=False)
+    imagen_url = Column(String(255), nullable=True)
+
+    order = relationship("Order", back_populates="items")

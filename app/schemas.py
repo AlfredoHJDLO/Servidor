@@ -1,5 +1,5 @@
 # app/schemas.py (Actualizado para el carrito preliminar)
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 import datetime
 
@@ -14,6 +14,11 @@ class PaletaBase(BaseModel):
 
 class PaletaCreate(PaletaBase):
     pass
+
+class PaletaResponse(PaletaBase):
+    id: int
+    class Config:
+        orm_mode = True
 
 class PaletaInDB(PaletaBase):
     id: int = Field(..., example=1)
@@ -74,3 +79,55 @@ class CartItemInDB(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class UserBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, example="usuario123")
+    email: EmailStr
+    password: str = Field(..., min_length=6, example="password123")
+    is_admin: bool = Field(True, example=True)
+    class Config:
+        orm_mode = True
+
+class UserCreate(UserBase):
+    pass
+
+class UserResponse(UserBase):
+    id: int
+
+
+class OrderBase(BaseModel):
+    user_id: int
+
+class OrderCreate(OrderBase):
+    pass
+
+
+class OrderItemBase(BaseModel):
+    paleta_id: Optional[int]
+    quantity: int
+    nombre: str
+    descripcion: Optional[str]
+    ingredientes: Optional[str]
+    precio: float
+    imagen_url: Optional[str]
+class OrderItemInDB(OrderItemBase):
+    id: int
+    order_id: int
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "from_attributes": True  # equivalente a orm_mode = True
+    }
+
+class OrderInDB(OrderBase):
+    id: int
+    user_id: int
+    created_at: datetime.datetime
+    attended: bool
+    items: List[OrderItemInDB] = []
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "from_attributes": True  # equivalente a orm_mode = True
+    }
