@@ -255,7 +255,7 @@ def list_orders(attended: Optional[bool] = Query(None), db: Session = Depends(ge
     return orders
 
 # Opcionalmente (para el usuario). Detalle de un pedido.
-@app.get("/orders/user/{order_id}", response_model=schemas.OrderInDB)
+@app.get("/orders/oder/{order_id}", response_model=schemas.OrderInDB)
 def get_order(order_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
