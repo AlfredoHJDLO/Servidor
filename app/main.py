@@ -5,6 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+import os
+
 from .auth import get_current_active_user
 from . import models, schemas
 from .database import engine, get_db
@@ -12,7 +14,8 @@ from .users import users
 from .auth import auth
 # Crea las tablas en la base de datos si no existen
 # Esto creará la tabla 'cart_items_preliminar' también
-models.Base.metadata.create_all(bind=engine)
+if os.getenv("TESTING_ENV") != "True": # <--- AÑADE ESTA CONDICIÓN
+    models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="API de Paletas Ternurin",
